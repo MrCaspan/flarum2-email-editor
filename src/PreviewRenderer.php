@@ -164,7 +164,11 @@ class PreviewRenderer
 
         $blueprint = match (true) {
             ! $keys => null,
-            $shared => $kind === 'notification' ? $this->blueprints->makeAny($actor) : null,
+            // A part of one particular email (Suspend's "No reason given") shows in that email,
+            // without sample values, since such a text appears only when there's no value.
+            // Parts every email shares (greeting, footers) show in any notification.
+            $shared => $this->blueprints->make($keys, $actor, sampleValues: false)
+                ?? ($kind === 'notification' ? $this->blueprints->makeAny($actor) : null),
             default => $this->blueprints->make($keys, $actor),
         };
 

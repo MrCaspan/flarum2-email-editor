@@ -48,14 +48,14 @@ class BlueprintPreview
      * @param string[] $keys the email's text keys
      * @return (MailableInterface&BlueprintInterface)|null
      */
-    public function make(array $keys, User $recipient): ?object
+    public function make(array $keys, User $recipient, bool $sampleValues = true): ?object
     {
         $match = $this->find($keys);
 
-        return $match ? $this->build($match[0], $match[1], $recipient) : null;
+        return $match ? $this->build($match[0], $match[1], $recipient, $sampleValues) : null;
     }
 
-    protected function build(string $class, ?string $part, User $recipient): ?object
+    protected function build(string $class, ?string $part, User $recipient, bool $sampleValues = true): ?object
     {
         $posts = Post::whereVisibleTo(new Guest())
             ->where('type', 'comment')
@@ -69,7 +69,7 @@ class BlueprintPreview
             return null;
         }
 
-        return $this->construct($class, $part, $posts, $recipient);
+        return $this->construct($class, $part, $posts, $recipient, $sampleValues);
     }
 
     /**
@@ -258,7 +258,7 @@ class BlueprintPreview
     /**
      * @param Post[] $posts newest first
      */
-    protected function construct(string $class, ?string $part, array $posts, User $recipient): ?object
+    protected function construct(string $class, ?string $part, array $posts, User $recipient, bool $sampleValues = true): ?object
     {
         $post = $posts[0];
         $author = $post->user;
@@ -278,7 +278,7 @@ class BlueprintPreview
                     $args[] = $post->discussion;
                 } elseif ($typeName && is_a($typeName, User::class, true)) {
                     // "user" is who the email is about (the recipient, e.g. a suspension); others did something.
-                    $args[] = $param->getName() === 'user' ? $this->recipient($recipient) : $author;
+                    $args[] = $param->getName() === 'user' ? $this->recipient($recipient, $sampleValues) : $author;
                 } elseif ($typeName && is_a($typeName, Group::class, true)) {
                     $args[] = Group::whereNotIn('id', [Group::GUEST_ID, Group::MEMBER_ID])->orderBy('id')->first() ?? new Group();
                 } elseif ($typeName && is_a($typeName, AbstractModel::class, true)) {
@@ -313,13 +313,14 @@ class BlueprintPreview
 
     /**
      * An unsaved copy of the admin, with a sample suspension reason so the
-     * suspension email shows one.
+     * suspension email shows one. Without sample values (previewing a text
+     * like "No reason given", used only when there's no value) it's left empty.
      */
-    protected function recipient(User $recipient): User
+    protected function recipient(User $recipient, bool $sampleValues = true): User
     {
         $copy = clone $recipient;
 
-        if (! $copy->suspend_message) {
+        if ($sampleValues && ! $copy->suspend_message) {
             $copy->suspend_message = resolve('translator')->trans('mrcaspan-flarum2-email-editor.admin.sample_reason');
         }
 
