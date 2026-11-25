@@ -1,8 +1,6 @@
 import app from 'flarum/admin/app';
 import ExtensionPage from 'flarum/admin/components/ExtensionPage';
 import Button from 'flarum/common/components/Button';
-import Component from 'flarum/common/Component';
-import Dropdown from 'flarum/common/components/Dropdown';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import Switch from 'flarum/common/components/Switch';
 import Select from 'flarum/common/components/Select';
@@ -10,6 +8,7 @@ import classList from 'flarum/common/utils/classList';
 import extractText from 'flarum/common/utils/extractText';
 import saveSettings from 'flarum/admin/utils/saveSettings';
 import darkEmail from '../utils/darkEmail';
+import TagModal from './TagModal';
 
 const PREFIX = 'mrcaspan-flarum2-email-editor.admin.';
 const t = (key, params) => app.translator.trans(PREFIX + key, params);
@@ -43,14 +42,12 @@ const LAYOUT_DEFAULTS = {
 };
 const COLORS = ['color_bg', 'color_card', 'color_border', 'color_text', 'color_accent'];
 
-// A section heading inside a dropdown menu (rendered as its own <li>).
-class MenuHeading extends Component {
-  static isListItem = true;
-
-  view() {
-    return <li className="Dropdown-header">{this.attrs.label}</li>;
-  }
-}
+// Texts that have a "show" switch next to them, and the setting it changes.
+const SHOW_SWITCHES = {
+  'core.email.greeting': 'show_greeting',
+  'core.email.signoff': 'show_signoff',
+  'core.email.notification.default_title': 'show_title',
+};
 
 const humanize = (s) =>
   String(s)
@@ -68,6 +65,10 @@ export default class EmailEditorPage extends ExtensionPage {
     this.search = '';
     this.selectedId = null;
     this.drafts = {};
+    // Unsaved show switches (show_greeting and so on) of the open email.
+    this.showDrafts = {};
+    // HTML | Text switch of each paired text: html key -> 'html' | 'text'.
+    this.pairMode = {};
     this.showOriginal = {};
     this.errors = {};
     this.saving = false;
@@ -79,6 +80,8 @@ export default class EmailEditorPage extends ExtensionPage {
     this.previewOf = null;
     // null = follow the admin panel's theme until the toggle is used.
     this.darkPreview = null;
+    // Ring the open section's texts in red in the preview.
+    this.highlight = true;
     this.previewing = false;
     this.sending = false;
 
@@ -184,6 +187,21 @@ export default class EmailEditorPage extends ExtensionPage {
     return group.fields.filter((f) => this.draftValue(f) !== f.value).map((f) => f.key);
   }
 
+  showValue(name) {
+    return Object.prototype.hasOwnProperty.call(this.showDrafts, name) ? this.showDrafts[name] : this.layoutSaved[name];
+  }
+
+  /** The show switches of this email that were changed and not saved. */
+  dirtySwitches(group) {
+    if (!group) return [];
+    const names = group.fields.map((f) => SHOW_SWITCHES[f.key]).filter(Boolean);
+    return [...new Set(names)].filter((name) => this.showValue(name) !== this.layoutSaved[name]);
+  }
+
+  isDirty(group) {
+    return this.dirtyKeys(group).length > 0 || this.dirtySwitches(group).length > 0;
+  }
+
   layoutDirty() {
     return Object.keys(LAYOUT_DEFAULTS).some((k) => this.layout[k] !== this.layoutSaved[k]);
   }
@@ -194,18 +212,24 @@ export default class EmailEditorPage extends ExtensionPage {
     if (id === this.selectedId) return;
 
     const current = this.groups[this.selectedId];
-    if (this.dirtyKeys(current).length && !confirm(extractText(t('discard_confirm')))) return;
+    if (this.isDirty(current) && !confirm(extractText(t('discard_confirm')))) return;
 
     this.selectedId = id;
     this.drafts = {};
+    this.showDrafts = {};
+    this.pairMode = {};
     this.errors = {};
     this.showOriginal = {};
     this.preview = null;
     this.notice = null;
 
-    // An email opens on its preview.
-    this.emailView = 'html';
-    this.runPreview(this.groups[id]);
+    // An email opens on its preview; texts no email uses only have Edit.
+    if (this.groups[id].preview) {
+      this.emailView = 'html';
+      this.runPreview(this.groups[id]);
+    } else {
+      this.emailView = 'edit';
+    }
   }
 
   /** Switch between the HTML / Plain text previews and the Edit tab. */
@@ -220,9 +244,10 @@ export default class EmailEditorPage extends ExtensionPage {
 
   changeLocale(locale) {
     const current = this.groups[this.selectedId];
-    if (this.dirtyKeys(current).length && !confirm(extractText(t('discard_confirm')))) return;
+    if (this.isDirty(current) && !confirm(extractText(t('discard_confirm')))) return;
 
     this.drafts = {};
+    this.showDrafts = {};
     this.errors = {};
     this.preview = null;
     this.data = null;
@@ -237,6 +262,36 @@ export default class EmailEditorPage extends ExtensionPage {
       // Back to the original text = drop the edit, so future updates to it come through.
       values[key] = field.default !== null && value === field.default ? null : value;
     });
+
+    const switches = this.dirtySwitches(group);
+
+    if (switches.length) {
+      const settings = {};
+      switches.forEach((name) => (settings[SETTING + name] = this.showValue(name) ? '1' : '0'));
+
+      this.saving = true;
+      saveSettings(settings).then(
+        () => {
+          switches.forEach((name) => {
+            this.layoutSaved[name] = this.layout[name] = this.showValue(name);
+            delete this.showDrafts[name];
+          });
+
+          if (!Object.keys(values).length) {
+            this.saving = false;
+            this.notice = t('saved');
+          }
+          this.previewOf = null;
+          // With texts too, saving them refreshes the preview; switches alone, refresh here.
+          if (!Object.keys(values).length && this.emailView !== 'edit') this.runPreview(group);
+          m.redraw();
+        },
+        () => {
+          this.saving = false;
+          m.redraw();
+        }
+      );
+    }
 
     this.saveValues(values);
   }
@@ -264,6 +319,9 @@ export default class EmailEditorPage extends ExtensionPage {
           this.setData(res);
           this.drafts = {};
           this.notice = t('saved');
+          // Saved texts aren't in the preview request, so it can't tell they changed: always refresh.
+          this.previewOf = null;
+          if (this.emailView !== 'edit' && this.groups[this.selectedId]) this.runPreview(this.groups[this.selectedId]);
           m.redraw();
         },
         (error) => {
@@ -285,6 +343,8 @@ export default class EmailEditorPage extends ExtensionPage {
     const body = { locale: this.locale, kind: group ? group.kind : 'notification' };
 
     if (group) {
+      body.keys = group.fields.map((f) => f.key);
+      body.highlight = this.highlight;
       body.texts = {};
 
       group.fields.forEach((f) => {
@@ -297,7 +357,8 @@ export default class EmailEditorPage extends ExtensionPage {
       });
     }
 
-    if (this.tab === 'layout') body.layout = this.layout;
+    // The Layout tab previews its unsaved options; an email, its unsaved show switches.
+    body.layout = this.tab === 'layout' ? this.layout : { ...this.layoutSaved, ...this.showDrafts };
 
     return body;
   }
@@ -305,10 +366,12 @@ export default class EmailEditorPage extends ExtensionPage {
   runPreview(group) {
     const body = this.previewBody(group);
     this.previewing = true;
-    this.previewOf = JSON.stringify(body);
+    const sent = (this.previewOf = JSON.stringify(body));
 
     app.request({ method: 'POST', url: api('/preview'), body }).then(
       (res) => {
+        // A newer preview was asked for meanwhile: that one wins.
+        if (this.previewOf !== sent) return;
         this.previewing = false;
         this.preview = res;
         if (this.previewTab === 'html' && !res.html) this.previewTab = 'text';
@@ -521,7 +584,7 @@ export default class EmailEditorPage extends ExtensionPage {
     const group = this.groups[this.selectedId];
     if (!group) return <div className="EmailEditor-empty">{t('pick_one')}</div>;
 
-    const dirty = this.dirtyKeys(group).length > 0;
+    const dirty = this.isDirty(group);
 
     return (
       <div className="EmailEditor-email">
@@ -532,22 +595,29 @@ export default class EmailEditorPage extends ExtensionPage {
           </div>
         </div>
 
-        <div className="EmailEditor-viewTabs">
-          {['html', 'text', 'edit'].map((view) => (
-            <Button
-              className={classList('Button', { 'Button--primary': this.emailView === view })}
-              icon={{ html: 'fas fa-envelope-open-text', text: 'fas fa-align-left', edit: 'fas fa-pen' }[view]}
-              onclick={() => this.showView(group, view)}
-            >
-              {t('view_' + view)}
-            </Button>
-          ))}
-          {this.emailView === 'html' ? this.themeToggle() : null}
-        </div>
+        {group.preview ? (
+          <div className="EmailEditor-viewTabs">
+            {['html', 'text', 'edit'].map((view) => (
+              <Button
+                className={classList('Button', { 'Button--primary': this.emailView === view })}
+                icon={{ html: 'fas fa-envelope-open-text', text: 'fas fa-align-left', edit: 'fas fa-pen' }[view]}
+                onclick={() => this.showView(group, view)}
+              >
+                {t('view_' + view)}
+              </Button>
+            ))}
+            {this.emailView !== 'edit' ? (
+              <span className="EmailEditor-previewTools">
+                {this.highlightToggle(group)}
+                {this.emailView === 'html' ? this.themeToggle() : null}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {this.errors._ ? <div className="EmailEditor-error">{this.errors._}</div> : null}
 
-        {this.emailView === 'edit' ? group.fields.map((field) => this.fieldEditor(field, group)) : this.emailPreview()}
+        {this.emailView === 'edit' ? this.fieldPairs(group).map((item) => this.pairEditor(item, group)) : this.emailPreview()}
 
         <div className="EmailEditor-actions">
           <Button className="Button Button--primary" icon="fas fa-save" loading={this.saving} disabled={!dirty} onclick={() => this.save(group)}>
@@ -559,14 +629,17 @@ export default class EmailEditorPage extends ExtensionPage {
             disabled={!dirty}
             onclick={() => {
               this.drafts = {};
+              this.showDrafts = {};
               if (this.emailView !== 'edit') this.runPreview(group);
             }}
           >
             {t('undo_button')}
           </Button>
-          <Button className="Button" icon="fas fa-paper-plane" loading={this.sending} onclick={() => this.sendTest(group)}>
-            {t('send_test_button')}
-          </Button>
+          {group.preview ? (
+            <Button className="Button" icon="fas fa-paper-plane" loading={this.sending} onclick={() => this.sendTest(group)}>
+              {t('send_test_button')}
+            </Button>
+          ) : null}
           {group.edited ? (
             <Button className="Button Button--danger" icon="fas fa-history" onclick={() => this.resetGroup(group)}>
               {t('reset_all_button')}
@@ -575,7 +648,11 @@ export default class EmailEditorPage extends ExtensionPage {
           {this.notice && !dirty ? <span className="EmailEditor-notice">{this.notice}</span> : null}
         </div>
 
-        <p className="helpText EmailEditor-previewHelp">{t(group.kind === 'information' ? 'preview_help_information' : 'preview_help_notification')}</p>
+        {group.preview ? (
+          <p className="helpText EmailEditor-previewHelp">
+            {t(this.preview && this.preview.real ? 'preview_help_real' : group.kind === 'information' ? 'preview_help_information' : 'preview_help_notification')}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -595,7 +672,7 @@ export default class EmailEditorPage extends ExtensionPage {
           // Sandboxed: no scripts run; links open in a new tab.
           this.emailFrame(p.html)
         ) : (
-          <pre className="EmailEditor-pre">{p.text}</pre>
+          <pre className="EmailEditor-pre">{this.markedText(p.text)}</pre>
         )}
       </div>
     );
@@ -606,6 +683,35 @@ export default class EmailEditorPage extends ExtensionPage {
   }
 
   /** Light / dark switch for the HTML preview, at the right of the tabs. */
+  /** Ring this section's texts in red in the preview, or not. */
+  highlightToggle(group) {
+    return (
+      <Button
+        className={classList('Button', { 'Button--primary': this.highlight })}
+        icon="fas fa-highlighter"
+        onclick={() => {
+          this.highlight = !this.highlight;
+          this.runPreview(group);
+        }}
+      >
+        {t('highlight')}
+      </Button>
+    );
+  }
+
+  /** Plain-text preview, with this section's texts (between the marks) in red. */
+  markedText(text) {
+    const parts = String(text || '').split(/([])/);
+    let on = false;
+
+    return parts.map((part) => {
+      if (part === '') return (on = true), null;
+      if (part === '') return (on = false), null;
+      // Several lines: one box around all of them.
+      return on ? <span className={classList('EmailEditor-mark', { 'EmailEditor-mark--block': part.includes('\n') })}>{part}</span> : part;
+    });
+  }
+
   themeToggle() {
     const dark = this.isDarkPreview();
 
@@ -629,7 +735,70 @@ export default class EmailEditorPage extends ExtensionPage {
     );
   }
 
-  fieldEditor(field, group) {
+  /**
+   * The texts of an email, with each HTML-email text paired with its
+   * plain-text twin: the body's html + plain, and "x" + "x_plain" (footers).
+   *
+   * @return {Array<{field}|{html, plain}>}
+   */
+  fieldPairs(group) {
+    const fields = group.fields;
+    const used = new Set();
+    const items = [];
+
+    const htmls = fields.filter((f) => f.role === 'html');
+    const plains = fields.filter((f) => f.role === 'plain');
+    const bodyPair = htmls.length === 1 && plains.length === 1 ? { html: htmls[0], plain: plains[0] } : null;
+
+    fields.forEach((f) => {
+      if (used.has(f.key)) return;
+
+      let plain = null;
+      if (bodyPair && f === bodyPair.html) plain = bodyPair.plain;
+      else if (!(bodyPair && f === bodyPair.plain)) plain = fields.find((p) => p.key === f.key + '_plain' && !used.has(p.key)) || null;
+
+      if (plain) {
+        used.add(f.key).add(plain.key);
+        items.push({ html: f, plain });
+      } else {
+        used.add(f.key);
+        items.push({ field: f });
+      }
+    });
+
+    return items;
+  }
+
+  /** One text, or an HTML / plain-text pair with an HTML | Text switch. */
+  pairEditor(item, group) {
+    if (item.field) return this.fieldEditor(item.field, group);
+
+    const { html, plain } = item;
+    // Open on the side with a save error, if one has.
+    const mode = this.pairMode[html.key] || (this.errors[plain.key] && !this.errors[html.key] ? 'text' : 'html');
+    const shown = mode === 'text' ? plain : html;
+    const label = html.role === 'html' ? t('field_body') : this.fieldLabel(html);
+
+    const switcher = (
+      <span className="EmailEditor-pairTabs">
+        {[
+          ['html', html],
+          ['text', plain],
+        ].map(([key, f]) => (
+          <Button
+            className={classList('Button Button--text', { active: mode === key, 'EmailEditor-pairTab--error': this.errors[f.key] })}
+            onclick={() => (this.pairMode[html.key] = key)}
+          >
+            {t('pair_' + key)}
+          </Button>
+        ))}
+      </span>
+    );
+
+    return this.fieldEditor(shown, group, { label, switcher, key: html.key });
+  }
+
+  fieldEditor(field, group, pair = null) {
     const value = this.draftValue(field);
     // Tags every email text can use, minus ones this text already has, and
     // the notification-only ones in account emails.
@@ -639,24 +808,44 @@ export default class EmailEditorPage extends ExtensionPage {
       .map((tag) => tag.name);
     const id = 'EmailEditor-field-' + field.key.replace(/[^A-Za-z0-9_-]/g, '_');
     const differs = field.default !== null && value !== field.default;
-    const rows = Math.min(14, Math.max(field.role === 'subject' ? 1 : 3, value.split('\n').length + 1));
+    const rows = Math.min(14, Math.max(3, value.split('\n').length + 1));
 
     return (
-      <div className={classList('EmailEditor-field', { 'EmailEditor-field--error': this.errors[field.key] })} key={field.key}>
+      <div className={classList('EmailEditor-field', { 'EmailEditor-field--error': this.errors[field.key] })} key={pair ? pair.key : field.key}>
         <div className="EmailEditor-fieldHead">
-          <label for={id}>{this.fieldLabel(field)}</label>
+          <label for={id}>{pair ? pair.label : this.fieldLabel(field)}</label>
+          {pair ? pair.switcher : null}
           {field.edited ? <span className="EmailEditor-badge">{t('edited_badge')}</span> : null}
           <code className="EmailEditor-key">{field.key}</code>
-          {this.tagMenu(field.placeholders, tags, (name) => this.insertPlaceholder(field, name))}
         </div>
 
-        <textarea
-          id={id}
-          className="FormControl EmailEditor-textarea"
-          rows={rows}
-          value={value}
-          oninput={(e) => (this.drafts[field.key] = e.target.value)}
-        />
+        {SHOW_SWITCHES[field.key] ? (
+          <Switch state={this.showValue(SHOW_SWITCHES[field.key])} onchange={(on) => (this.showDrafts[SHOW_SWITCHES[field.key]] = on)}>
+            {t('layout.' + SHOW_SWITCHES[field.key])}
+          </Switch>
+        ) : null}
+
+        <div className={classList('EmailEditor-inputWrap', { 'EmailEditor-inputWrap--line': field.role === 'subject' })}>
+          {field.role === 'subject' ? (
+            // A subject is one line.
+            <input
+              id={id}
+              type="text"
+              className="FormControl EmailEditor-textarea"
+              value={value}
+              oninput={(e) => (this.drafts[field.key] = e.target.value)}
+            />
+          ) : (
+            <textarea
+              id={id}
+              className="FormControl EmailEditor-textarea"
+              rows={rows}
+              value={value}
+              oninput={(e) => (this.drafts[field.key] = e.target.value)}
+            />
+          )}
+          {this.tagButton(field.placeholders, tags, (name) => this.insertPlaceholder(field, name))}
+        </div>
 
         {this.errors[field.key] ? <div className="EmailEditor-error">{this.errors[field.key]}</div> : null}
 
@@ -682,34 +871,29 @@ export default class EmailEditorPage extends ExtensionPage {
   }
 
   /**
-   * The "Insert tag" button: a list of this text's own placeholders and the
-   * tags every email can use, each with what it is. Clicking one inserts it.
+   * The "Insert tag" button inside a text box (bottom right; at the end of a
+   * one-line box). It opens a list of this text's own placeholders and the
+   * tags every email can use, each with what it is; clicking one inserts it
+   * where the cursor was.
    */
-  tagMenu(own, shared, insert) {
+  tagButton(own, shared, insert) {
     if (!own.length && !shared.length) return null;
 
-    const item = (name, isOwn) => (
-      <Button className="EmailEditor-tagItem" onclick={() => insert(name)}>
-        <code>{'{' + name + '}'}</code>
-        <span className="EmailEditor-tagHelp">{this.tagHelp(name, isOwn)}</span>
-      </Button>
-    );
-
     return (
-      <Dropdown
-        className="EmailEditor-tagMenu"
-        buttonClassName="Button Button--text"
-        menuClassName="Dropdown-menu--right"
+      <Button
+        className="Button Button--icon EmailEditor-tagButton"
         icon="fas fa-tag"
-        caretIcon="fas fa-caret-down"
-        label={t('insert_tag')}
-        lazyDraw
-      >
-        {own.length ? <MenuHeading label={t('tags_this_text')} /> : null}
-        {own.map((name) => item(name, true))}
-        {shared.length ? <MenuHeading label={t('tags_all_emails')} /> : null}
-        {shared.map((name) => item(name, false))}
-      </Dropdown>
+        aria-label={extractText(t('insert_tag'))}
+        title={extractText(t('insert_tag'))}
+        onclick={() =>
+          app.modal.show(TagModal, {
+            own,
+            shared,
+            help: (name, isOwn) => this.tagHelp(name, isOwn),
+            onselect: insert,
+          })
+        }
+      />
     );
   }
 
@@ -773,19 +957,6 @@ export default class EmailEditorPage extends ExtensionPage {
 
         <fieldset className={classList('EmailEditor-layoutOptions', { disabled: !L.custom_layout })} disabled={!L.custom_layout}>
           <div className="Form-group">
-            <Switch state={L.show_title} onchange={set('show_title')}>
-              {t('layout.show_title')}
-            </Switch>
-            <Switch state={L.show_greeting} onchange={set('show_greeting')}>
-              {t('layout.show_greeting')}
-            </Switch>
-            <Switch state={L.show_signoff} onchange={set('show_signoff')}>
-              {t('layout.show_signoff')}
-            </Switch>
-            <div className="helpText">{t('layout.wording_help')}</div>
-          </div>
-
-          <div className="Form-group">
             <label>{t('layout.logo_align')}</label>
             <Select
               value={L.logo_align}
@@ -802,15 +973,17 @@ export default class EmailEditorPage extends ExtensionPage {
           <div className="Form-group">
             <div className="EmailEditor-fieldHead">
               <label for="EmailEditor-footerText">{t('layout.footer_text')}</label>
-              {this.data && this.data.tags ? this.tagMenu([], this.data.tags.map((tag) => tag.name), (name) => this.insertFooterTag(name)) : null}
             </div>
-            <textarea
-              id="EmailEditor-footerText"
-              className="FormControl"
-              rows={3}
-              value={L.footer_text}
-              oninput={(e) => (L.footer_text = e.target.value)}
-            />
+            <div className="EmailEditor-inputWrap">
+              <textarea
+                id="EmailEditor-footerText"
+                className="FormControl"
+                rows={3}
+                value={L.footer_text}
+                oninput={(e) => (L.footer_text = e.target.value)}
+              />
+              {this.data && this.data.tags ? this.tagButton([], this.data.tags.map((tag) => tag.name), (name) => this.insertFooterTag(name)) : null}
+            </div>
             <div className="helpText">{t('layout.footer_text_help')}</div>
           </div>
         </fieldset>

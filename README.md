@@ -11,17 +11,21 @@ It changes **emails only**. Nothing on the forum itself is touched, and no core 
 - **Every email in one list.** Account activation, password reset, email change, notifications (replies, mentions, new posts, suspensions, private discussions, …) and the shared parts (greeting, sign-off, footers), grouped by extension.
 - **Automatically includes future extensions.** The list is not hard-coded. In Flarum 2.0, core and extensions keep the words of their emails in translations named `<extension>.email.…`, and Email Editor finds every one of them each time you open it. Install a new extension that sends email and its emails appear, ready to edit.
 - **Edit the subject and body** of each email, with:
-  - clickable **placeholders** (`{title}`, `{url}`, …) that insert at the cursor
+  - an **Insert tag** button inside each text box: pick a placeholder (`{title}`, `{url}`, …) from one list that says what each one is, and it goes in at the cursor
+  - an **HTML | Text** switch where a text has separate HTML-email and plain-text wording, so each pair is one box
   - the **original wording** shown next to your version, with a one-click "use original"
   - a check that refuses text with a broken placeholder, because that would make the email fail to send
   - **reset** per email, back to the original
 - **Tags that work in every email**, on top of each text's own placeholders: `{forumTitle}` `{forumUrl}` `{settingsLink}` `{userEmail}` `{username}` `{unsubscribeLink}` `{type}` `{date}` `{year}`. They work in subjects and in the extra footer text too. `{unsubscribeLink}` and `{type}` only have a value in notification emails and are empty in account emails. For example, the notification footer can be one line: `Sent to {userEmail} · [Unsubscribe]({unsubscribeLink}) · [Notification settings]({settingsLink})`.
+- **Show or hide** the title, the greeting ("Hey name,") and the sign-off, with a switch next to each text (Flarum core → General texts, Notification). Works with Flarum's standard layout and the custom one.
 - **Layout options** (optional; off by default, so emails keep Flarum's standard layout until you switch it on):
-  - show or hide the title, greeting ("Hey name,") and sign-off
   - logo position
   - colours for the page background, email background, border, text, and links and title
   - extra footer text (Markdown) on every email
-- **Preview first.** Pick an email and it opens on its preview, with **HTML**, **Plain text** and **Edit** tabs. Sample values fill the placeholders, and unsaved changes show everywhere they're used, the greeting, sign-off and footers included. A **Light / Dark** switch shows the HTML email the way mail apps display it in dark mode.
+- **Preview first.** Pick an email and it opens on its preview, with **HTML**, **Plain text** and **Edit** tabs. Unsaved changes show everywhere they're used, the greeting, sign-off and footers included.
+  - **The real email.** A notification email is built from its own template, exactly as it sends (post excerpt box included), using the newest public post on the forum. Shared parts (greeting, sign-off, footers) are shown inside a real email. Account emails use sample values.
+  - **Highlight** rings the texts you're editing in red, so you can see where they land. It's only in the preview, never in an email that's sent.
+  - A **Light / Dark** switch shows the HTML email the way mail apps display it in dark mode.
 - **Send test to me**: emails the preview to your own address.
 - **Multiple languages**: if you have language packs installed, pick which language's texts to edit.
 - Edited texts are kept per language in your database. Texts you haven't edited keep following the original, including when an update changes it.
@@ -63,7 +67,7 @@ Disable the extension, and every email goes back to its original wording and lay
 ### Limits
 
 - An extension that writes its email wording straight into its view instead of using translations can't have that wording edited. Its emails still get your layout options.
-- The preview shows each email's text inside Flarum's standard notification or account email with sample values. An extension's own email view may add more (a post excerpt, say), so the real email can differ slightly.
+- The preview builds notification emails from real forum content (the newest post guests can see), so the forum needs at least one public post for that. If a notification can't be built that way, or for account emails, the preview shows the email's text inside Flarum's standard email with sample values, and the real email can differ slightly.
 - If an extension update adds a new placeholder to an email you've edited, your version keeps working. Click "Show original" to see what changed and add the new placeholder yourself.
 
 ### API (admin only)

@@ -28,6 +28,13 @@ class EmailCatalog
     /** Key segments that say which part of an email a text is. */
     protected const FIELD_PARTS = ['subject', 'body', 'html', 'plain', 'text'];
 
+    /**
+     * Texts not listed in the editor. The account-email layout's fallback
+     * heading is only used when an email has no title, and every account
+     * email has one, so editing it changes nothing.
+     */
+    protected const HIDDEN = ['core.email.informational.default_title'];
+
     /** @var array<string, array<string, ?string>> */
     protected array $defaultsCache = [];
 
@@ -133,7 +140,7 @@ class EmailCatalog
 
         $groups = [];
 
-        foreach ($keys as $key) {
+        foreach (array_diff($keys, self::HIDDEN) as $key) {
             [$namespace, $groupPath, $field] = $this->split($key);
             $id = $namespace.':'.$groupPath;
 

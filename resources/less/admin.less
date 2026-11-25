@@ -125,6 +125,10 @@
   &-field {
     margin-bottom: 18px;
 
+    .Checkbox {
+      margin-bottom: 6px;
+    }
+
     &--error .EmailEditor-textarea {
       border-color: var(--control-danger-color, #d66);
     }
@@ -142,6 +146,30 @@
     }
   }
 
+  // HTML | Text switch of a paired text.
+  &-pairTabs {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--border-radius, 4px);
+    background: var(--control-bg);
+
+    .Button {
+      padding: 2px 10px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .Button.active {
+      background: var(--primary-color);
+      color: #fff;
+    }
+  }
+
+  &-pairTab--error.Button:not(.active) {
+    color: var(--control-danger-color, #d66);
+  }
+
   &-key {
     margin-left: auto;
     font-size: 11px;
@@ -152,6 +180,12 @@
 
   &-textarea {
     width: 100%;
+    // Flarum caps inputs on extension pages at 400px (.ExtensionPage-settings input);
+    // the subject should line up with the body.
+    .EmailEditor &,
+    .ExtensionPage-settings input& {
+      max-width: none;
+    }
     font-family: var(--font-family-monospace, monospace);
     font-size: 13px;
     resize: vertical;
@@ -167,44 +201,40 @@
     font-size: 12px;
   }
 
-  // "Insert tag" button, at the right of a text's heading.
-  &-tagMenu {
-    margin-left: auto;
+  // A text box with the "Insert tag" button inside it: bottom right, clear of
+  // the resize handle; on a one-line box, at its end.
+  &-inputWrap {
+    position: relative;
 
-    .Dropdown-menu {
-      max-height: 360px;
-      overflow-y: auto;
-      min-width: 320px;
+    textarea {
+      padding-right: 44px;
     }
 
-    .Dropdown-header {
-      padding: 8px 15px 4px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: var(--muted-color);
+    input {
+      padding-right: 40px;
     }
   }
 
-  &-tagItem.Button {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-    white-space: normal;
-    text-align: left;
+  &-tagButton.Button {
+    position: absolute;
+    right: 18px;
+    bottom: 8px;
+    padding: 4px 8px;
+    background: none;
+    color: var(--muted-color);
 
-    code {
-      font-size: 12px;
-      background: none;
-      padding: 0;
+    &:hover,
+    &:focus {
+      background: var(--control-bg-shaded, rgba(0, 0, 0, 0.08));
       color: var(--text-color);
     }
   }
 
-  &-tagHelp {
-    font-size: 12px;
-    color: var(--muted-color);
+  &-inputWrap--line &-tagButton.Button {
+    right: 4px;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
   }
 
   &-originalTools {
@@ -279,6 +309,25 @@
 
   &-themeToggle {
     margin-left: auto;
+  }
+
+  &-previewTools {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+
+  // This section's texts in the plain-text preview.
+  &-mark {
+    color: #e53935;
+    background: rgba(229, 57, 53, 0.15);
+    outline: 1px dashed #e53935;
+    border-radius: 2px;
+
+    &--block {
+      display: inline-block;
+      vertical-align: top;
+    }
   }
 
 
@@ -385,5 +434,42 @@
     &-list {
       max-height: 40vh;
     }
+  }
+}
+
+// The "Insert tag" modal: one list, each tag with what it is underneath.
+.EmailEditor-tagModal {
+  .Modal-body {
+    max-height: 65vh;
+    overflow-y: auto;
+  }
+
+  .EmailEditor-tagItem.Button {
+    display: block;
+    width: 100%;
+    margin-bottom: 4px;
+    white-space: normal;
+    text-align: left;
+
+    .Button-label {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+
+    code {
+      font-size: 13px;
+      background: none;
+      padding: 0;
+      color: var(--text-color);
+    }
+  }
+
+  // Same line as the tag, with a space after it.
+  .EmailEditor-tagHelp {
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--muted-color);
   }
 }

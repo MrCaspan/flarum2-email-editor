@@ -14,9 +14,9 @@ mrcaspan-flarum2-email-editor:
     field_html: Body (HTML email)
     field_plain: Body (plain-text email)
     field_body: Body
+    pair_html: HTML
+    pair_text: Text
     insert_tag: Insert tag
-    tags_this_text: This text
-    tags_all_emails: All emails
 
     # What each shared tag is (Insert tag menu).
     tag_help:
@@ -89,10 +89,12 @@ mrcaspan-flarum2-email-editor:
     view_html: HTML
     view_text: Plain text
     view_edit: Edit
+    highlight: Highlight
     show_dark: Dark
     show_light: Light
     preview_failed: The preview couldn't be shown. Check the texts on the Edit tab.
     preview_help_notification: Preview and test use sample values for the placeholders, in Flarum's standard notification email. Unsaved changes are included.
+    preview_help_real: Preview and test show the real email, built from the newest public post on the forum. Unsaved changes are included.
     preview_help_information: Preview and test use sample values for the placeholders, in Flarum's standard account email. Unsaved changes are included.
 
     # Server-side messages
@@ -105,6 +107,7 @@ mrcaspan-flarum2-email-editor:
     sample_title: Friday night tournament
     sample_content: This is some sample post content.
     sample_user: SampleUser
+    sample_reason: This is a sample suspension reason.
 
     layout:
       custom_layout: Use the custom layout
@@ -112,7 +115,6 @@ mrcaspan-flarum2-email-editor:
       show_title: Show the email title under the logo
       show_greeting: Show the greeting ("Hey name,")
       show_signoff: Show the sign-off ("The forum team")
-      wording_help: To change the wording of the greeting, sign-off or footers, edit them under Emails → Flarum core.
       logo_align: Logo position
       align_left: Left
       align_center: Centre

@@ -12,6 +12,7 @@ namespace MrCaspan\EmailEditor\Api;
 use Flarum\Http\RequestUtil;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\JsonResponse;
+use MrCaspan\EmailEditor\BlueprintPreview;
 use MrCaspan\EmailEditor\EmailCatalog;
 use MrCaspan\EmailEditor\EmailTags;
 use Psr\Http\Message\ResponseInterface;
@@ -44,10 +45,21 @@ class EmailsController implements RequestHandlerInterface
             $locale = $catalog->defaultLocale();
         }
 
+        $blueprints = resolve(BlueprintPreview::class);
+
+        // Sections that are an email, or a part used in emails, get a preview;
+        // texts nothing uses (FoF Subscribed's notification type names, say) don't.
+        $groups = array_map(function (array $group) use ($blueprints) {
+            $group['preview'] = array_intersect(array_column($group['fields'], 'role'), ['subject', 'html', 'plain', 'body'])
+                || $blueprints->used(array_column($group['fields'], 'key'));
+
+            return $group;
+        }, $catalog->groups($locale));
+
         return [
             'locale' => $locale,
             'locales' => $catalog->locales(),
-            'groups' => $catalog->groups($locale),
+            'groups' => $groups,
             'tags' => array_map(fn (string $name) => [
                 'name' => $name,
                 'notificationOnly' => in_array($name, EmailTags::NOTIFICATION_ONLY, true),

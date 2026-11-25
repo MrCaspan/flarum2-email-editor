@@ -25,13 +25,17 @@ class TagTranslator implements TranslatorInterface
      */
     public function __construct(
         protected TranslatorInterface $translator,
-        protected array $tags
+        protected array $tags,
+        protected ?PreviewHighlight $highlight = null
     ) {
     }
 
     public function trans($id, array $parameters = [], $domain = null, $locale = null): string
     {
-        return $this->translator->trans($id, $this->with($id, $parameters), $domain, $locale);
+        $text = $this->translator->trans($id, $this->with($id, $parameters), $domain, $locale);
+
+        // Only while an admin preview renders: mark the texts being edited.
+        return $this->highlight ? $this->highlight->wrap($id, $text) : $text;
     }
 
     public function get($key, array $replace = [], $locale = null): string

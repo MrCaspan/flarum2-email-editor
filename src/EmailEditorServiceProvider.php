@@ -25,6 +25,7 @@ class EmailEditorServiceProvider extends AbstractServiceProvider
         $this->container->singleton(LayoutSettings::class);
         $this->container->singleton(EmailCatalog::class);
         $this->container->singleton(EmailTags::class);
+        $this->container->singleton(PreviewHighlight::class);
 
         // afterResolving runs once every extension has added its translation
         // files (they use `resolving`), so the edited texts are added last and
@@ -75,7 +76,7 @@ class EmailEditorServiceProvider extends AbstractServiceProvider
             $tags = $this->container->make(EmailTags::class)->values($data);
 
             $view->with([
-                'translator' => new TagTranslator($translator, $tags),
+                'translator' => new TagTranslator($translator, $tags, $this->container->make(PreviewHighlight::class)),
                 'emailEditorTags' => $tags,
             ]);
         });

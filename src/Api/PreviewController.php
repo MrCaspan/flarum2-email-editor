@@ -37,9 +37,16 @@ class PreviewController implements RequestHandlerInterface
         $actor->assertAdmin();
 
         $input = (array) $request->getParsedBody();
+        $isTest = str_ends_with($request->getUri()->getPath(), '/test');
+
+        // The red rings are for the preview only, never in an email that's sent.
+        if ($isTest) {
+            unset($input['highlight']);
+        }
+
         $rendered = $this->renderer->render($actor, $input);
 
-        if (str_ends_with($request->getUri()->getPath(), '/test')) {
+        if ($isTest) {
             $this->renderer->send($actor, $rendered);
             $rendered['sentTo'] = $actor->email;
         }

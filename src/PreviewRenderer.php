@@ -28,9 +28,10 @@ use Symfony\Component\Translation\MessageCatalogueInterface;
  * views (and so through this extension's layout), with sample values in
  * place of the real ones.
  *
- * It's a close preview, not an exact copy: each extension builds its emails
- * in its own view, and those views need real discussions and posts. Here the
- * email's text is shown inside core's standard notification or account email.
+ * A notification email is rendered from its own views, exactly as it sends,
+ * built from the newest public post (see BlueprintPreview). Any other email,
+ * or one that can't be built that way, shows its text inside core's standard
+ * notification or account email.
  */
 class PreviewRenderer
 {
@@ -42,7 +43,9 @@ class PreviewRenderer
         protected UrlGenerator $url,
         protected LayoutSettings $layout,
         protected Mailer $mailer,
-        protected EmailTags $tags
+        protected EmailTags $tags,
+        protected BlueprintPreview $blueprints,
+        protected PreviewHighlight $highlight
     ) {
     }
 
@@ -66,10 +69,14 @@ class PreviewRenderer
 
         $restore = $this->useUnsavedTexts(Arr::get($input, 'texts'));
 
+        // Ring the texts being edited in red (preview only; never set for a sent email).
+        $this->highlight->set(Arr::get($input, 'highlight') ? (array) Arr::get($input, 'keys') : []);
+
         try {
             return $this->build($actor, $input);
         } finally {
             $restore();
+            $this->highlight->set([]);
             $this->layout->setPreview(null);
             $this->translator->setLocale($previousLocale);
         }
@@ -132,17 +139,43 @@ class PreviewRenderer
             $email = $message->getSymfonyMessage();
 
             if ($format !== 'plain') {
-                $email->html($rendered['html']);
+                $email->html(PreviewHighlight::strip($rendered['html']));
             }
 
             if ($format !== 'html') {
-                $email->text($rendered['text']);
+                $email->text(PreviewHighlight::strip($rendered['text']));
             }
         });
     }
 
     protected function build(User $actor, array $input): array
     {
+        $keys = array_values(array_filter((array) Arr::get($input, 'keys'), 'is_string'));
+        $kind = Arr::get($input, 'kind') === 'information' ? 'information' : 'notification';
+
+        // Texts that aren't an email of their own (greeting, sign-off, footers)
+        // are shown inside a real email: any notification, or an account email.
+        $shared = $keys && ! array_filter(['subject', 'html', 'plain', 'body'], fn ($n) => Arr::has($input, $n));
+
+        if ($shared && $kind === 'information') {
+            $input['subject'] = $this->translator->trans('core.email.activate_account.subject');
+            $input['body'] = $this->translator->trans('core.email.activate_account.body');
+        }
+
+        $blueprint = match (true) {
+            ! $keys => null,
+            $shared => $kind === 'notification' ? $this->blueprints->makeAny($actor) : null,
+            default => $this->blueprints->make($keys, $actor),
+        };
+
+        if ($blueprint) {
+            try {
+                return $this->buildReal($actor, $blueprint);
+            } catch (\Throwable) {
+                // Fall back to the email's text in core's standard email.
+            }
+        }
+
         $mail = new MailFormatter($this->formatter);
         $kind = Arr::get($input, 'kind') === 'information' ? 'information' : 'notification';
         $locale = $this->translator->getLocale();
@@ -155,7 +188,7 @@ class PreviewRenderer
             'userEmail' => $actor->email,
             'username' => $actor->display_name,
             'unsubscribeLink' => $kind === 'notification' ? $this->url->to('forum')->base() : null,
-            'type' => $this->translator->trans('core.email.notification.types.postCreated'),
+            'type' => 'postCreated',
         ]);
 
         $subject =$this->fill($text('subject') ?? '', $actor, $locale);
@@ -171,26 +204,34 @@ class PreviewRenderer
             $htmlSource = $plainSource = $this->translator->trans('mrcaspan-flarum2-email-editor.admin.sample_body');
         }
 
-        $source = $this->fill($htmlSource ?? $plainSource, $actor, $locale);
+        // The body here is the email's own text (not a stand-in for a shared part): ring it.
+        $mark = fn (string $s) => $this->highlight->active() && ! $shared && trim($s) !== ''
+            ? PreviewHighlight::START.$s.PreviewHighlight::END
+            : $s;
+
+        $source = $mark($this->fill($htmlSource ?? $plainSource, $actor, $locale));
 
         // Account emails arrive as plain text; notification emails as Markdown.
         $bodyHtml = $kind === 'information' ? $mail->plainToHtml($source) : $mail->convert($source);
-        $bodyPlain = $plainSource !== null ? $this->fill($plainSource, $actor, $locale) : $mail->htmlToPlain($bodyHtml);
+        $bodyPlain = $plainSource !== null ? $mark($this->fill($plainSource, $actor, $locale)) : $mail->htmlToPlain($bodyHtml);
 
         $forumTitle = (string) $this->settings->get('forum_title');
+
+        // Notification emails are always headed "Notification"; account emails by their title.
+        $title = $kind === 'notification' ? $this->highlight->wrap('core.email.notification.default_title', $this->translator->trans('core.email.notification.default_title')) : $subject;
 
         // The layouts read these as shared view data, as they do when core sends mail.
         $this->views->share([
             'username' => $actor->display_name,
             'userEmail' => $actor->email,
             'forumTitle' => $forumTitle,
-            'title' => $subject,
+            'title' => $title,
         ]);
 
         $data = [
-            'title' => $subject,
+            'title' => $title,
             'user' => $actor,
-            'type' => $this->translator->trans('core.email.notification.types.postCreated'),
+            'type' => 'postCreated',
             // Account emails have no unsubscribe link, so {unsubscribeLink} previews empty there, as it sends.
             'unsubscribeLink' => $kind === 'notification' ? $this->url->to('forum')->base() : null,
             'settingsLink' => $this->url->to('forum')->route('settings'),
@@ -202,9 +243,50 @@ class PreviewRenderer
         $plain = $this->views->make("mail::plain.$kind", $data + ['body' => $bodyPlain])->render();
 
         return [
-            'subject' => SafeSubstitution::restore($subject, escape: false),
-            'html' => SafeSubstitution::restore($html),
+            'subject' => PreviewHighlight::strip(SafeSubstitution::restore($subject, escape: false)),
+            'html' => PreviewHighlight::html(SafeSubstitution::restore($html)),
             'text' => trim(SafeSubstitution::restore($plain, escape: false)),
+        ];
+    }
+
+    /**
+     * Render a notification's own email views, the way NotificationMailer does
+     * when it sends one, so the preview is the real email.
+     */
+    protected function buildReal(User $actor, object $blueprint): array
+    {
+        $type = $blueprint::getType();
+        $forumTitle = (string) $this->settings->get('forum_title');
+
+        $data = [
+            'blueprint' => $blueprint,
+            'user' => $actor,
+            // The real link holds a one-time token; the forum address stands in for it.
+            'unsubscribeLink' => $this->url->to('forum')->base(),
+            'settingsLink' => $this->url->to('forum')->route('settings'),
+            'type' => $type,
+            'forumTitle' => $forumTitle,
+            'username' => $actor->display_name,
+            'userEmail' => $actor->email,
+            'title' => $this->highlight->wrap('core.email.notification.default_title', $this->translator->trans('core.email.notification.default_title')),
+        ];
+
+        $this->views->share($data);
+
+        $this->tagValues = $this->tags->values($data);
+
+        $views = $blueprint->getEmailViews();
+        $html = $this->views->make($views['html'], $data)->render();
+        $plain = $this->views->make($views['text'], $data)->render();
+
+        // The subject's tags are filled when the email is sent; do the same here.
+        $subject = EmailTags::fill($blueprint->getEmailSubject($this->translator), $this->tagValues);
+
+        return [
+            'subject' => PreviewHighlight::strip(SafeSubstitution::restore($subject, escape: false)),
+            'html' => PreviewHighlight::html(SafeSubstitution::restore($html)),
+            'text' => trim(SafeSubstitution::restore($plain, escape: false)),
+            'real' => true,
         ];
     }
 
@@ -254,7 +336,7 @@ class PreviewRenderer
             str_contains($n, 'title') => $this->translator->trans('mrcaspan-flarum2-email-editor.admin.sample_title'),
             str_contains($n, 'content') || str_contains($n, 'message') || str_contains($n, 'reason') => $this->translator->trans('mrcaspan-flarum2-email-editor.admin.sample_content'),
             $n === 'provider' => 'Google',
-            $n === 'type' => $this->translator->trans('core.email.notification.types.postCreated'),
+            $n === 'type' => 'postCreated',
             in_array($n, ['package', 'replacement'], true) => 'vendor/sample-extension',
             str_contains($n, 'name') || str_contains($n, 'user') || str_contains($n, 'actor') || str_contains($n, 'poster') => $this->translator->trans('mrcaspan-flarum2-email-editor.admin.sample_user'),
             default => '['.$name.']',
