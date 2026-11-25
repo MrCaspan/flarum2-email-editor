@@ -21,7 +21,7 @@ It changes **emails only**. Nothing on the forum itself is touched, and no core 
   - logo position
   - colours for the page background, email background, border, text, and links and title
   - extra footer text (Markdown) on every email
-- **Preview** any email, in HTML and plain text, with sample values, including unsaved changes.
+- **Preview first.** Pick an email and it opens on its preview, with **HTML**, **Plain text** and **Edit** tabs. Sample values fill the placeholders, and unsaved changes show everywhere they're used, the greeting, sign-off and footers included. A **Light / Dark** switch shows the HTML email the way mail apps display it in dark mode.
 - **Send test to me**: emails the preview to your own address.
 - **Multiple languages**: if you have language packs installed, pick which language's texts to edit.
 - Edited texts are kept per language in your database. Texts you haven't edited keep following the original, including when an update changes it.

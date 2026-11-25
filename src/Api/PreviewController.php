@@ -20,7 +20,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  * POST /api/email-editor/preview  render an email with sample values
  * POST /api/email-editor/test     the same, then email it to the admin
  *
- * Body: { locale, kind: "notification"|"information", subject, html, plain, body, layout: {...} }
+ * Body: { locale, kind: "notification"|"information", subject, html, plain, body, texts: {key: text}, layout: {...} }
  * Every part is optional, and unsaved text and layout options can be sent,
  * so the admin sees changes before saving them.
  */

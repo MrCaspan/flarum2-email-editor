@@ -21,6 +21,7 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Arr;
 use Symfony\Component\Translation\Formatter\IntlFormatter;
+use Symfony\Component\Translation\MessageCatalogueInterface;
 
 /**
  * Renders an email the way the forum would send it, through core's own email
@@ -63,12 +64,60 @@ class PreviewRenderer
         $layout = Arr::get($input, 'layout');
         $this->layout->setPreview(is_array($layout) ? $layout : null);
 
+        $restore = $this->useUnsavedTexts(Arr::get($input, 'texts'));
+
         try {
             return $this->build($actor, $input);
         } finally {
+            $restore();
             $this->layout->setPreview(null);
             $this->translator->setLocale($previousLocale);
         }
+    }
+
+    /**
+     * Put unsaved email texts into the translator for this one render, so the
+     * preview shows them everywhere they're used, the greeting, sign-off and
+     * footers included. A text with a broken placeholder is skipped (its
+     * saved wording shows) rather than failing the whole preview.
+     *
+     * @return callable(): void puts the saved texts back
+     */
+    protected function useUnsavedTexts(mixed $texts): callable
+    {
+        if (! is_array($texts) || ! $texts) {
+            return fn () => null;
+        }
+
+        $catalogue = $this->translator->getCatalogue();
+        $domain = 'messages'.MessageCatalogueInterface::INTL_DOMAIN_SUFFIX;
+        $intl = new IntlFormatter();
+        $saved = [];
+
+        foreach ($texts as $key => $value) {
+            if (! is_string($key) || ! is_string($value) || ! EmailCatalog::isEmailKey($key)) {
+                continue;
+            }
+
+            $value = str_replace("\r\n", "\n", $value);
+
+            if ($value !== '' && class_exists(\MessageFormatter::class)) {
+                try {
+                    $intl->formatIntl($value, $this->translator->getLocale(), []);
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+
+            $saved[$key] = $catalogue->get($key, 'messages');
+            $catalogue->set($key, $value, $domain);
+        }
+
+        return function () use ($catalogue, $domain, $saved) {
+            foreach ($saved as $key => $value) {
+                $catalogue->set($key, $value, $domain);
+            }
+        };
     }
 
     public function send(User $actor, array $rendered): void

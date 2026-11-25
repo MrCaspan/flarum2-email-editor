@@ -86,8 +86,14 @@ mrcaspan-flarum2-email-editor:
     test_sent: "Test email sent to {email}."
     preview_tab_html: HTML
     preview_tab_text: Plain text
-    preview_help_notification: Preview and test use sample values for the placeholders, in Flarum's standard notification email. Unsaved changes are included. Greeting, sign-off and footers show their saved wording.
-    preview_help_information: Preview and test use sample values for the placeholders, in Flarum's standard account email. Unsaved changes are included. Greeting, sign-off and footers show their saved wording.
+    view_html: HTML
+    view_text: Plain text
+    view_edit: Edit
+    show_dark: Dark
+    show_light: Light
+    preview_failed: The preview couldn't be shown. Check the texts on the Edit tab.
+    preview_help_notification: Preview and test use sample values for the placeholders, in Flarum's standard notification email. Unsaved changes are included.
+    preview_help_information: Preview and test use sample values for the placeholders, in Flarum's standard account email. Unsaved changes are included.
 
     # Server-side messages
     error_bad_request: The request was not understood.

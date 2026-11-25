@@ -9,10 +9,21 @@ import Select from 'flarum/common/components/Select';
 import classList from 'flarum/common/utils/classList';
 import extractText from 'flarum/common/utils/extractText';
 import saveSettings from 'flarum/admin/utils/saveSettings';
+import darkEmail from '../utils/darkEmail';
 
 const PREFIX = 'mrcaspan-flarum2-email-editor.admin.';
 const t = (key, params) => app.translator.trans(PREFIX + key, params);
 const SETTING = 'mrcaspan-email-editor.';
+
+// Whether the admin panel is showing in dark mode. Flarum puts the active theme
+// ("light", "dark", "dark-hc", ...) on <html data-theme>; anything else is
+// treated as "follow the system".
+const isDarkTheme = () => {
+  const theme = document.documentElement.getAttribute('data-theme') || '';
+  if (theme.startsWith('dark')) return true;
+  if (theme.startsWith('light')) return false;
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+};
 
 const api = (path = '') => app.forum.attribute('apiUrl') + '/email-editor' + path;
 
@@ -64,6 +75,10 @@ export default class EmailEditorPage extends ExtensionPage {
 
     this.preview = null;
     this.previewTab = 'html';
+    this.emailView = 'html';
+    this.previewOf = null;
+    // null = follow the admin panel's theme until the toggle is used.
+    this.darkPreview = null;
     this.previewing = false;
     this.sending = false;
 
@@ -87,6 +102,8 @@ export default class EmailEditorPage extends ExtensionPage {
 
     return app.request({ method: 'GET', url: api(), params }).then((res) => {
       this.setData(res);
+      // After a language change, show the open email in the new language.
+      if (this.groups[this.selectedId] && this.emailView !== 'edit') this.runPreview(this.groups[this.selectedId]);
       m.redraw();
     });
   }
@@ -185,6 +202,20 @@ export default class EmailEditorPage extends ExtensionPage {
     this.showOriginal = {};
     this.preview = null;
     this.notice = null;
+
+    // An email opens on its preview.
+    this.emailView = 'html';
+    this.runPreview(this.groups[id]);
+  }
+
+  /** Switch between the HTML / Plain text previews and the Edit tab. */
+  showView(group, view) {
+    this.emailView = view;
+
+    // Coming back from editing: refresh the preview if anything changed.
+    if (view !== 'edit' && this.previewOf !== JSON.stringify(this.previewBody(group))) {
+      this.runPreview(group);
+    }
   }
 
   changeLocale(locale) {
@@ -254,10 +285,15 @@ export default class EmailEditorPage extends ExtensionPage {
     const body = { locale: this.locale, kind: group ? group.kind : 'notification' };
 
     if (group) {
+      body.texts = {};
+
       group.fields.forEach((f) => {
         if (['subject', 'html', 'plain', 'body'].includes(f.role) && body[f.role] === undefined) {
           body[f.role] = this.draftValue(f);
         }
+
+        // Unsaved texts, so shared parts (greeting, sign-off, footers) preview as edited too.
+        if (this.draftValue(f) !== f.value) body.texts[f.key] = this.draftValue(f);
       });
     }
 
@@ -267,9 +303,11 @@ export default class EmailEditorPage extends ExtensionPage {
   }
 
   runPreview(group) {
+    const body = this.previewBody(group);
     this.previewing = true;
+    this.previewOf = JSON.stringify(body);
 
-    app.request({ method: 'POST', url: api('/preview'), body: this.previewBody(group) }).then(
+    app.request({ method: 'POST', url: api('/preview'), body }).then(
       (res) => {
         this.previewing = false;
         this.preview = res;
@@ -494,19 +532,37 @@ export default class EmailEditorPage extends ExtensionPage {
           </div>
         </div>
 
+        <div className="EmailEditor-viewTabs">
+          {['html', 'text', 'edit'].map((view) => (
+            <Button
+              className={classList('Button', { 'Button--primary': this.emailView === view })}
+              icon={{ html: 'fas fa-envelope-open-text', text: 'fas fa-align-left', edit: 'fas fa-pen' }[view]}
+              onclick={() => this.showView(group, view)}
+            >
+              {t('view_' + view)}
+            </Button>
+          ))}
+          {this.emailView === 'html' ? this.themeToggle() : null}
+        </div>
+
         {this.errors._ ? <div className="EmailEditor-error">{this.errors._}</div> : null}
 
-        {group.fields.map((field) => this.fieldEditor(field, group))}
+        {this.emailView === 'edit' ? group.fields.map((field) => this.fieldEditor(field, group)) : this.emailPreview()}
 
         <div className="EmailEditor-actions">
           <Button className="Button Button--primary" icon="fas fa-save" loading={this.saving} disabled={!dirty} onclick={() => this.save(group)}>
             {t('save_button')}
           </Button>
-          <Button className="Button" icon="fas fa-undo" disabled={!dirty} onclick={() => (this.drafts = {})}>
+          <Button
+            className="Button"
+            icon="fas fa-undo"
+            disabled={!dirty}
+            onclick={() => {
+              this.drafts = {};
+              if (this.emailView !== 'edit') this.runPreview(group);
+            }}
+          >
             {t('undo_button')}
-          </Button>
-          <Button className="Button" icon="fas fa-eye" loading={this.previewing} onclick={() => this.runPreview(group)}>
-            {t('preview_button')}
           </Button>
           <Button className="Button" icon="fas fa-paper-plane" loading={this.sending} onclick={() => this.sendTest(group)}>
             {t('send_test_button')}
@@ -520,9 +576,56 @@ export default class EmailEditorPage extends ExtensionPage {
         </div>
 
         <p className="helpText EmailEditor-previewHelp">{t(group.kind === 'information' ? 'preview_help_information' : 'preview_help_notification')}</p>
-
-        {this.previewPane()}
       </div>
+    );
+  }
+
+  /** The HTML or Plain text tab of an email. */
+  emailPreview() {
+    const p = this.preview;
+
+    if (!p) return this.previewing ? <LoadingIndicator /> : <div className="EmailEditor-empty">{t('preview_failed')}</div>;
+
+    return (
+      <div className={classList('EmailEditor-preview', { 'EmailEditor-preview--loading': this.previewing })}>
+        <div className="EmailEditor-previewSubject">
+          <span className="EmailEditor-toolLabel">{t('field_subject')}</span> {p.subject}
+        </div>
+        {this.emailView === 'html' ? (
+          // Sandboxed: no scripts run; links open in a new tab.
+          this.emailFrame(p.html)
+        ) : (
+          <pre className="EmailEditor-pre">{p.text}</pre>
+        )}
+      </div>
+    );
+  }
+
+  isDarkPreview() {
+    return this.darkPreview === null ? isDarkTheme() : this.darkPreview;
+  }
+
+  /** Light / dark switch for the HTML preview, at the right of the tabs. */
+  themeToggle() {
+    const dark = this.isDarkPreview();
+
+    return (
+      <Button className="Button EmailEditor-themeToggle" icon={dark ? 'fas fa-sun' : 'fas fa-moon'} onclick={() => (this.darkPreview = !dark)}>
+        {t(dark ? 'show_light' : 'show_dark')}
+      </Button>
+    );
+  }
+
+  /** The HTML email in a sandboxed frame (no scripts; links open in a new tab), light or dark. */
+  emailFrame(html) {
+    const dark = this.isDarkPreview();
+
+    return (
+      <iframe
+        className={classList('EmailEditor-frame', { 'EmailEditor-frame--dark': dark })}
+        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        srcdoc={'<base target="_blank">' + (dark ? darkEmail(html) : html)}
+      />
     );
   }
 
@@ -643,10 +746,11 @@ export default class EmailEditorPage extends ExtensionPage {
         <div className="EmailEditor-previewTabs">
           {tab('html')}
           {tab('text')}
+          {this.previewTab === 'html' ? this.themeToggle() : null}
         </div>
         {this.previewTab === 'html' ? (
           // Sandboxed: no scripts run; links open in a new tab.
-          <iframe className="EmailEditor-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc={'<base target="_blank">' + p.html} />
+          this.emailFrame(p.html)
         ) : (
           <pre className="EmailEditor-pre">{p.text}</pre>
         )}

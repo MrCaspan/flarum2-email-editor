@@ -271,6 +271,21 @@
     word-break: break-word;
   }
 
+  &-viewTabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  &-themeToggle {
+    margin-left: auto;
+  }
+
+
+  &-preview--loading {
+    opacity: 0.6;
+  }
+
   &-previewTabs {
     display: flex;
     gap: 6px;
@@ -284,6 +299,10 @@
     border: 0;
     border-radius: var(--border-radius, 4px);
     background: #fff;
+
+    &.EmailEditor-frame--dark {
+      background: #121212;
+    }
   }
 
   &-pre {
