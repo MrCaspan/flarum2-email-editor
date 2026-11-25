@@ -1,6 +1,8 @@
 import app from 'flarum/admin/app';
 import ExtensionPage from 'flarum/admin/components/ExtensionPage';
 import Button from 'flarum/common/components/Button';
+import Component from 'flarum/common/Component';
+import Dropdown from 'flarum/common/components/Dropdown';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import Switch from 'flarum/common/components/Switch';
 import Select from 'flarum/common/components/Select';
@@ -29,6 +31,15 @@ const LAYOUT_DEFAULTS = {
   footer_text: '',
 };
 const COLORS = ['color_bg', 'color_card', 'color_border', 'color_text', 'color_accent'];
+
+// A section heading inside a dropdown menu (rendered as its own <li>).
+class MenuHeading extends Component {
+  static isListItem = true;
+
+  view() {
+    return <li className="Dropdown-header">{this.attrs.label}</li>;
+  }
+}
 
 const humanize = (s) =>
   String(s)
@@ -533,6 +544,7 @@ export default class EmailEditorPage extends ExtensionPage {
           <label for={id}>{this.fieldLabel(field)}</label>
           {field.edited ? <span className="EmailEditor-badge">{t('edited_badge')}</span> : null}
           <code className="EmailEditor-key">{field.key}</code>
+          {this.tagMenu(field.placeholders, tags, (name) => this.insertPlaceholder(field, name))}
         </div>
 
         <textarea
@@ -546,20 +558,7 @@ export default class EmailEditorPage extends ExtensionPage {
         {this.errors[field.key] ? <div className="EmailEditor-error">{this.errors[field.key]}</div> : null}
 
         <div className="EmailEditor-fieldTools">
-          <span className="EmailEditor-placeholderRows">
-            {field.placeholders.length ? (
-              <span className="EmailEditor-placeholders">
-                <span className="EmailEditor-toolLabel">{t('placeholders_label')}</span>
-                {field.placeholders.map((name) => this.placeholderChip(field, name))}
-              </span>
-            ) : null}
-            {tags.length ? (
-              <span className="EmailEditor-placeholders">
-                <span className="EmailEditor-toolLabel">{t('tags_label')}</span>
-                {tags.map((name) => this.placeholderChip(field, name))}
-              </span>
-            ) : null}
-          </span>
+          <span />
 
           {differs ? (
             <span className="EmailEditor-originalTools">
@@ -579,12 +578,51 @@ export default class EmailEditorPage extends ExtensionPage {
     );
   }
 
-  placeholderChip(field, name) {
-    return (
-      <button type="button" className="EmailEditor-chip" title={extractText(t('insert_placeholder'))} onclick={() => this.insertPlaceholder(field, name)}>
-        {'{' + name + '}'}
-      </button>
+  /**
+   * The "Insert tag" button: a list of this text's own placeholders and the
+   * tags every email can use, each with what it is. Clicking one inserts it.
+   */
+  tagMenu(own, shared, insert) {
+    if (!own.length && !shared.length) return null;
+
+    const item = (name, isOwn) => (
+      <Button className="EmailEditor-tagItem" onclick={() => insert(name)}>
+        <code>{'{' + name + '}'}</code>
+        <span className="EmailEditor-tagHelp">{this.tagHelp(name, isOwn)}</span>
+      </Button>
     );
+
+    return (
+      <Dropdown
+        className="EmailEditor-tagMenu"
+        buttonClassName="Button Button--text"
+        menuClassName="Dropdown-menu--right"
+        icon="fas fa-tag"
+        caretIcon="fas fa-caret-down"
+        label={t('insert_tag')}
+        lazyDraw
+      >
+        {own.length ? <MenuHeading label={t('tags_this_text')} /> : null}
+        {own.map((name) => item(name, true))}
+        {shared.length ? <MenuHeading label={t('tags_all_emails')} /> : null}
+        {shared.map((name) => item(name, false))}
+      </Dropdown>
+    );
+  }
+
+  /** What a tag is, or '' if it's one we don't know. */
+  tagHelp(name, isOwn) {
+    // A missing translation comes back as its own key.
+    const has = (key) => extractText(t(key)) !== PREFIX + key;
+
+    // A text's own placeholder can mean something else than the shared tag of
+    // the same name ({username} in a subject is often the poster), so own
+    // placeholders use their own wording first.
+    for (const key of isOwn ? ['placeholder_help.' + name, 'tag_help.' + name] : ['tag_help.' + name]) {
+      if (has(key)) return t(key);
+    }
+
+    return '';
   }
 
   previewPane() {
@@ -658,7 +696,10 @@ export default class EmailEditorPage extends ExtensionPage {
           </div>
 
           <div className="Form-group">
-            <label>{t('layout.footer_text')}</label>
+            <div className="EmailEditor-fieldHead">
+              <label for="EmailEditor-footerText">{t('layout.footer_text')}</label>
+              {this.data && this.data.tags ? this.tagMenu([], this.data.tags.map((tag) => tag.name), (name) => this.insertFooterTag(name)) : null}
+            </div>
             <textarea
               id="EmailEditor-footerText"
               className="FormControl"
@@ -667,17 +708,6 @@ export default class EmailEditorPage extends ExtensionPage {
               oninput={(e) => (L.footer_text = e.target.value)}
             />
             <div className="helpText">{t('layout.footer_text_help')}</div>
-            {this.data && this.data.tags ? (
-              <div className="EmailEditor-fieldTools">
-                <span className="EmailEditor-placeholders">
-                  {this.data.tags.map((tag) => (
-                    <button type="button" className="EmailEditor-chip" title={extractText(t('insert_placeholder'))} onclick={() => this.insertFooterTag(tag.name)}>
-                      {'{' + tag.name + '}'}
-                    </button>
-                  ))}
-                </span>
-              </div>
-            ) : null}
           </div>
         </fieldset>
 

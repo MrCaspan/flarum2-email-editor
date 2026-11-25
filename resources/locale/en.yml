@@ -14,9 +14,61 @@ mrcaspan-flarum2-email-editor:
     field_html: Body (HTML email)
     field_plain: Body (plain-text email)
     field_body: Body
-    placeholders_label: "Placeholders:"
-    tags_label: "Also available:"
-    insert_placeholder: Insert at the cursor
+    insert_tag: Insert tag
+    tags_this_text: This text
+    tags_all_emails: All emails
+
+    # What each shared tag is (Insert tag menu).
+    tag_help:
+      forumTitle: Forum name
+      forumUrl: Forum web address
+      settingsLink: Link to the recipient's notification settings
+      userEmail: Recipient's email address
+      username: Recipient's name
+      unsubscribeLink: Unsubscribe link (notification emails only)
+      type: Notification type, e.g. newPost (notification emails only)
+      date: Today's date
+      year: The current year
+
+    # What the placeholders of individual emails are. Ones not listed show no explanation.
+    placeholder_help:
+      Event: Your word for an event (e.g. Game)
+      Events: Your word for events (e.g. Games)
+      event: Your word for an event, lowercase
+      events: Your word for events, lowercase
+      Attendee: Your word for an attendee (e.g. Player)
+      Attendees: Your word for attendees (e.g. Players)
+      attendee: Your word for an attendee, lowercase
+      attendees: Your word for attendees, lowercase
+      Spot: Your word for a spot (e.g. Seat)
+      Spots: Your word for spots (e.g. Seats)
+      spot: Your word for a spot, lowercase
+      spots: Your word for spots, lowercase
+      actor: Person who did it
+      actor_display_name: Name of the person who did it
+      content: Post content
+      discussion_title: Discussion title
+      discussion_url: Link to the discussion
+      display_name: Name of the person who did it
+      email: Recipient's email address
+      forum: Forum name
+      forum_url: Forum web address
+      hours: Number of hours
+      mentioner_display_name: Name of the person who mentioned
+      new_email: The new email address
+      package: Extension name
+      post_content: Post content
+      post_number: Post number
+      post_url: Link to the post
+      poster_display_name: Name of the person who posted
+      provider: Login provider (e.g. Google)
+      replacement: Suggested replacement extension
+      replier_display_name: Name of the person who replied
+      suspension_message: Reason given for the suspension
+      title: Title (of the discussion or event)
+      url: The link this email is about
+      user_url: Link to the user's profile
+      username: A user's name
     show_original: Show original
     hide_original: Hide original
     use_original: Use original
@@ -67,5 +119,5 @@ mrcaspan-flarum2-email-editor:
       color_none: Default
       color_clear: Clear
       footer_text: Extra footer text
-      footer_text_help: Added under the normal footer of every email. Markdown and the tags below work. The unsubscribe link and type are empty in account emails. Leave empty for none.
+      footer_text_help: Added under the normal footer of every email. Markdown and tags work. Leave empty for none.
       preview_help: Preview and test show a sample notification email with these options, saved or not.
