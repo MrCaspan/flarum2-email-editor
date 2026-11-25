@@ -335,6 +335,23 @@ export default class EmailEditorPage extends ExtensionPage {
     }
   }
 
+  insertFooterTag(name) {
+    const textarea = document.getElementById('EmailEditor-footerText');
+    const value = this.layout.footer_text || '';
+    const token = '{' + name + '}';
+    const start = textarea ? textarea.selectionStart : value.length;
+    const end = textarea ? textarea.selectionEnd : value.length;
+
+    this.layout.footer_text = value.slice(0, start) + token + value.slice(end);
+
+    if (textarea) {
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + token.length;
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- views
 
   content() {
@@ -468,7 +485,7 @@ export default class EmailEditorPage extends ExtensionPage {
 
         {this.errors._ ? <div className="EmailEditor-error">{this.errors._}</div> : null}
 
-        {group.fields.map((field) => this.fieldEditor(field))}
+        {group.fields.map((field) => this.fieldEditor(field, group))}
 
         <div className="EmailEditor-actions">
           <Button className="Button Button--primary" icon="fas fa-save" loading={this.saving} disabled={!dirty} onclick={() => this.save(group)}>
@@ -498,8 +515,14 @@ export default class EmailEditorPage extends ExtensionPage {
     );
   }
 
-  fieldEditor(field) {
+  fieldEditor(field, group) {
     const value = this.draftValue(field);
+    // Tags every email text can use, minus ones this text already has, and
+    // the notification-only ones in account emails.
+    const tags = (this.data.tags || [])
+      .filter((tag) => !field.placeholders.includes(tag.name))
+      .filter((tag) => !(tag.notificationOnly && group.kind === 'information'))
+      .map((tag) => tag.name);
     const id = 'EmailEditor-field-' + field.key.replace(/[^A-Za-z0-9_-]/g, '_');
     const differs = field.default !== null && value !== field.default;
     const rows = Math.min(14, Math.max(field.role === 'subject' ? 1 : 3, value.split('\n').length + 1));
@@ -523,16 +546,20 @@ export default class EmailEditorPage extends ExtensionPage {
         {this.errors[field.key] ? <div className="EmailEditor-error">{this.errors[field.key]}</div> : null}
 
         <div className="EmailEditor-fieldTools">
-          {field.placeholders.length ? (
-            <span className="EmailEditor-placeholders">
-              <span className="EmailEditor-toolLabel">{t('placeholders_label')}</span>
-              {field.placeholders.map((name) => (
-                <button type="button" className="EmailEditor-chip" title={extractText(t('insert_placeholder'))} onclick={() => this.insertPlaceholder(field, name)}>
-                  {'{' + name + '}'}
-                </button>
-              ))}
-            </span>
-          ) : null}
+          <span className="EmailEditor-placeholderRows">
+            {field.placeholders.length ? (
+              <span className="EmailEditor-placeholders">
+                <span className="EmailEditor-toolLabel">{t('placeholders_label')}</span>
+                {field.placeholders.map((name) => this.placeholderChip(field, name))}
+              </span>
+            ) : null}
+            {tags.length ? (
+              <span className="EmailEditor-placeholders">
+                <span className="EmailEditor-toolLabel">{t('tags_label')}</span>
+                {tags.map((name) => this.placeholderChip(field, name))}
+              </span>
+            ) : null}
+          </span>
 
           {differs ? (
             <span className="EmailEditor-originalTools">
@@ -549,6 +576,14 @@ export default class EmailEditorPage extends ExtensionPage {
         {differs && this.showOriginal[field.key] ? <pre className="EmailEditor-original">{field.default || t('empty_text')}</pre> : null}
         {field.default === null && field.edited ? <div className="helpText">{t('original_unknown')}</div> : null}
       </div>
+    );
+  }
+
+  placeholderChip(field, name) {
+    return (
+      <button type="button" className="EmailEditor-chip" title={extractText(t('insert_placeholder'))} onclick={() => this.insertPlaceholder(field, name)}>
+        {'{' + name + '}'}
+      </button>
     );
   }
 
@@ -624,8 +659,25 @@ export default class EmailEditorPage extends ExtensionPage {
 
           <div className="Form-group">
             <label>{t('layout.footer_text')}</label>
-            <textarea className="FormControl" rows={3} value={L.footer_text} oninput={(e) => (L.footer_text = e.target.value)} />
+            <textarea
+              id="EmailEditor-footerText"
+              className="FormControl"
+              rows={3}
+              value={L.footer_text}
+              oninput={(e) => (L.footer_text = e.target.value)}
+            />
             <div className="helpText">{t('layout.footer_text_help')}</div>
+            {this.data && this.data.tags ? (
+              <div className="EmailEditor-fieldTools">
+                <span className="EmailEditor-placeholders">
+                  {this.data.tags.map((tag) => (
+                    <button type="button" className="EmailEditor-chip" title={extractText(t('insert_placeholder'))} onclick={() => this.insertFooterTag(tag.name)}>
+                      {'{' + tag.name + '}'}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            ) : null}
           </div>
         </fieldset>
 

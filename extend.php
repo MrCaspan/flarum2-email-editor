@@ -31,6 +31,10 @@ return [
         // Core's original layouts under a second name, so ours can fall back to them.
         ->namespace('email-editor-core', CoreViews::emailPath()),
 
+    // Fills the shared tags in subjects and account emails at send time.
+    (new Extend\Event())
+        ->subscribe(Listener\FillTags::class),
+
     // Admin-only API used by the extension's admin page.
     (new Extend\Routes('api'))
         ->get('/email-editor', 'email-editor.index', Api\EmailsController::class)

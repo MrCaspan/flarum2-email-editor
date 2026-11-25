@@ -15,6 +15,7 @@ mrcaspan-flarum2-email-editor:
     field_plain: Body (plain-text email)
     field_body: Body
     placeholders_label: "Placeholders:"
+    tags_label: "Also available:"
     insert_placeholder: Insert at the cursor
     show_original: Show original
     hide_original: Hide original
@@ -66,5 +67,5 @@ mrcaspan-flarum2-email-editor:
       color_none: Default
       color_clear: Clear
       footer_text: Extra footer text
-      footer_text_help: Added under the normal footer of every email. Markdown works. Leave empty for none.
+      footer_text_help: Added under the normal footer of every email. Markdown and the tags below work. The unsubscribe link and type are empty in account emails. Leave empty for none.
       preview_help: Preview and test show a sample notification email with these options, saved or not.

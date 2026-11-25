@@ -13,6 +13,7 @@ use Flarum\Http\RequestUtil;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\JsonResponse;
 use MrCaspan\EmailEditor\EmailCatalog;
+use MrCaspan\EmailEditor\EmailTags;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -47,6 +48,10 @@ class EmailsController implements RequestHandlerInterface
             'locale' => $locale,
             'locales' => $catalog->locales(),
             'groups' => $catalog->groups($locale),
+            'tags' => array_map(fn (string $name) => [
+                'name' => $name,
+                'notificationOnly' => in_array($name, EmailTags::NOTIFICATION_ONLY, true),
+            ], EmailTags::NAMES),
         ];
     }
 }

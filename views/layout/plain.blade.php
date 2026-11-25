@@ -7,6 +7,7 @@
     $signoffText = (! isset($signoff) || $signoff !== false) && $L['show_signoff']
         ? trim($translator->trans('core.email.signoff', ['forumTitle' => $settings->get('forum_title')]))
         : '';
+    $emailEditorFooter = \MrCaspan\EmailEditor\EmailTags::fill($L['footer_text'], $emailEditorTags ?? [], fn ($v) => \Flarum\Mail\SafeSubstitution::mark([$v])[0]);
 @endphp
 @if ($L['show_title'])
 {!! $formatter->htmlToPlain($header ?? '') !!}
@@ -26,5 +27,5 @@
 {!! $formatter->htmlToPlain($footer ?? '') !!}
 @if ($L['footer_text'] !== '')
 
-{!! $formatter->htmlToPlain($formatter->convert($L['footer_text'])) !!}
+{!! $formatter->htmlToPlain($formatter->convert($emailEditorFooter)) !!}
 @endif

@@ -15,6 +15,7 @@ It changes **emails only**. Nothing on the forum itself is touched, and no core 
   - the **original wording** shown next to your version, with a one-click "use original"
   - a check that refuses text with a broken placeholder, because that would make the email fail to send
   - **reset** per email, back to the original
+- **Tags that work in every email**, on top of each text's own placeholders: `{forumTitle}` `{forumUrl}` `{settingsLink}` `{userEmail}` `{username}` `{unsubscribeLink}` `{type}` `{date}` `{year}`. They work in subjects and in the extra footer text too. `{unsubscribeLink}` and `{type}` only have a value in notification emails and are empty in account emails. For example, the notification footer can be one line: `Sent to {userEmail} · [Unsubscribe]({unsubscribeLink}) · [Notification settings]({settingsLink})`.
 - **Layout options** (optional; off by default, so emails keep Flarum's standard layout until you switch it on):
   - show or hide the title, greeting ("Hey name,") and sign-off
   - logo position

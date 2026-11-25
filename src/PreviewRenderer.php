@@ -40,9 +40,13 @@ class PreviewRenderer
         protected SettingsRepositoryInterface $settings,
         protected UrlGenerator $url,
         protected LayoutSettings $layout,
-        protected Mailer $mailer
+        protected Mailer $mailer,
+        protected EmailTags $tags
     ) {
     }
+
+    /** @var array<string, string> */
+    protected array $tagValues = [];
 
     /**
      * @return array{subject: string, html: string, text: string}
@@ -96,7 +100,16 @@ class PreviewRenderer
 
         $text = fn (string $name) => is_string($v = Arr::get($input, $name)) ? $v : null;
 
-        $subject = $this->fill($text('subject') ?? '', $actor, $locale);
+        // The shared tags get the values they'd have in a real email to this admin.
+        $this->tagValues = $this->tags->values([
+            'user' => $actor,
+            'userEmail' => $actor->email,
+            'username' => $actor->display_name,
+            'unsubscribeLink' => $kind === 'notification' ? $this->url->to('forum')->base() : null,
+            'type' => $this->translator->trans('core.email.notification.types.postCreated'),
+        ]);
+
+        $subject =$this->fill($text('subject') ?? '', $actor, $locale);
 
         if (trim($subject) === '') {
             $subject = $this->translator->trans('mrcaspan-flarum2-email-editor.admin.sample_subject');
@@ -129,7 +142,8 @@ class PreviewRenderer
             'title' => $subject,
             'user' => $actor,
             'type' => $this->translator->trans('core.email.notification.types.postCreated'),
-            'unsubscribeLink' => $this->url->to('forum')->base(),
+            // Account emails have no unsubscribe link, so {unsubscribeLink} previews empty there, as it sends.
+            'unsubscribeLink' => $kind === 'notification' ? $this->url->to('forum')->base() : null,
             'settingsLink' => $this->url->to('forum')->route('settings'),
             'userEmail' => $actor->email,
             'forumTitle' => $forumTitle,
@@ -154,7 +168,7 @@ class PreviewRenderer
 
         $values = [];
         foreach (array_unique($m[1]) as $name) {
-            $values[$name] = $this->sample($name, $actor);
+            $values[$name] = $this->tagValues[$name] ?? $this->sample($name, $actor);
         }
 
         if (! $values) {

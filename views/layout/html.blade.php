@@ -15,6 +15,8 @@
     $signoffText = (! isset($signoff) || $signoff !== false) && $L['show_signoff']
         ? $translator->trans('core.email.signoff', ['forumTitle' => $settings->get('forum_title')])
         : '';
+    // Tags in the extra footer text, held out of the Markdown like any placeholder.
+    $emailEditorFooter = \MrCaspan\EmailEditor\EmailTags::fill($L['footer_text'], $emailEditorTags ?? [], fn ($v) => \Flarum\Mail\SafeSubstitution::mark([$v])[0]);
 @endphp
 <!DOCTYPE html>
 <html lang="{{ $translator->getLocale() }}">
@@ -105,7 +107,7 @@
                         <div class="footer">
                             {{ $footer ?? '' }}
                             @if ($L['footer_text'] !== '')
-                                <div class="EmailEditor-footerText">{!! $formatter->convert($L['footer_text']) !!}</div>
+                                <div class="EmailEditor-footerText">{!! $formatter->convert($emailEditorFooter) !!}</div>
                             @endif
                         </div>
 
